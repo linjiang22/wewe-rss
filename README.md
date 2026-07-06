@@ -125,6 +125,11 @@ pnpm run start:server
 | `UPDATE_DELAY_TIME`      | 连续更新延迟时间，减少被关小黑屋                                        | `60s`                       |
 | `ENABLE_CLEAN_HTML`      | 是否开启正文html清理                                                    | `false`                     |
 | `PLATFORM_URL`           | 基础服务URL                                                             | `https://weread.111965.xyz` |
+| `FEISHU_APP_ID`          | 飞书应用 App ID，配置后账号失效会发送重新登录卡片                       | -                           |
+| `FEISHU_APP_SECRET`      | 飞书应用 App Secret                                                     | -                           |
+| `FEISHU_RECEIVE_ID`      | 飞书卡片接收 ID，例如群聊 `chat_id`                                     | -                           |
+| `FEISHU_RECEIVE_ID_TYPE` | 飞书卡片接收 ID 类型，可选 `chat_id`、`open_id`、`union_id`、`email`     | `chat_id`                   |
+| `FEISHU_BASE_URL`        | 飞书 OpenAPI 地址                                                       | `https://open.feishu.cn`    |
 
 > **注意**: 国内DNS解析问题可使用 `https://weread.965111.xyz` 加速访问
 

@@ -26,6 +26,7 @@ import { useEffect, useState } from 'react';
 const AccountPage = () => {
   const { isOpen, onOpen, onClose, onOpenChange } = useDisclosure();
   const [count, setCount] = useState(0);
+  const [loginAccountName, setLoginAccountName] = useState('');
 
   const { refetch, data, isFetching } = trpc.account.list.useQuery({});
 
@@ -37,7 +38,11 @@ const AccountPage = () => {
 
   const { mutateAsync: addAccount } = trpc.account.add.useMutation({});
 
-  const { mutateAsync, data: loginData } =
+  const {
+    mutateAsync,
+    data: loginData,
+    reset: resetLoginData,
+  } =
     trpc.platform.createLoginUrl.useMutation({
       onSuccess(data) {
         if (data.uuid) {
@@ -59,7 +64,7 @@ const AccountPage = () => {
           await addAccount({ id: `${data.vid}`, name, token: data.token });
 
           onClose();
-          toast.success('添加成功', {
+          toast.success(loginAccountName ? '重新登录成功' : '添加成功', {
             description: `用户名：${name}(${data.vid})`,
           });
           refetch();
@@ -69,6 +74,14 @@ const AccountPage = () => {
       },
     },
   );
+
+  const openLoginModal = (accountName = '') => {
+    setLoginAccountName(accountName);
+    setCount(0);
+    resetLoginData();
+    onOpen();
+    mutateAsync();
+  };
 
   useEffect(() => {
     let timerId;
@@ -85,10 +98,7 @@ const AccountPage = () => {
       <div className="flex justify-between m-4">
         <div className="font-bold">共{data?.items.length || 0}个账号</div>
         <Button
-          onPress={() => {
-            onOpen();
-            mutateAsync();
-          }}
+          onPress={() => openLoginModal()}
           size="sm"
           color="primary"
           endContent={<PlusIcon />}
@@ -136,18 +146,29 @@ const AccountPage = () => {
                   {dayjs(item.updatedAt).format('YYYY-MM-DD')}
                 </TableCell>
                 <TableCell className="flex gap-2">
-                  <StatusDropdown
-                    value={item.status}
-                    onChange={(value) => {
-                      updateAccount({
-                        id: item.id,
-                        data: { status: value },
-                      }).then(() => {
-                        toast.success('更新成功!');
-                        refetch();
-                      });
-                    }}
-                  ></StatusDropdown>
+                  {item.status === 0 ? (
+                    <Button
+                      size="sm"
+                      color="primary"
+                      variant="bordered"
+                      onPress={() => openLoginModal(item.name)}
+                    >
+                      重新登录
+                    </Button>
+                  ) : (
+                    <StatusDropdown
+                      value={item.status}
+                      onChange={(value) => {
+                        updateAccount({
+                          id: item.id,
+                          data: { status: value },
+                        }).then(() => {
+                          toast.success('更新成功!');
+                          refetch();
+                        });
+                      }}
+                    ></StatusDropdown>
+                  )}
 
                   <Button
                     size="sm"
@@ -172,6 +193,7 @@ const AccountPage = () => {
         isOpen={isOpen}
         onOpenChange={async () => {
           onOpenChange();
+          setLoginAccountName('');
           await queryUtils.platform.getLoginResult.cancel();
         }}
       >
@@ -179,7 +201,9 @@ const AccountPage = () => {
           {() => (
             <>
               <ModalHeader className="flex flex-col gap-1">
-                添加读书账号
+                {loginAccountName
+                  ? `重新登录：${loginAccountName}`
+                  : '添加读书账号'}
               </ModalHeader>
               <ModalBody>
                 <div className="m-auto pb-8 text-center">

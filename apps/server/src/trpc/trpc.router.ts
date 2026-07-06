@@ -99,6 +99,9 @@ export class TrpcRouter {
           create: input,
         });
         this.trpcService.removeBlockedAccount(id);
+        this.trpcService.triggerRefreshAllMpArticlesAndUpdateFeed(
+          `account ${id} login success`,
+        );
 
         return account;
       }),

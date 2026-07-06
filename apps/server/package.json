@@ -45,6 +45,7 @@
     "html-minifier": "^4.0.0",
     "lru-cache": "^10.2.2",
     "prisma": "^5.10.2",
+    "qrcode": "1.5.4",
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
     "zod": "^3.22.4"

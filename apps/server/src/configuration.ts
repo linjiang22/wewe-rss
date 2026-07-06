@@ -10,6 +10,7 @@ const configuration = () => {
   const authCode = process.env.AUTH_CODE;
   const platformUrl = process.env.PLATFORM_URL || 'https://weread.111965.xyz';
   const originUrl = process.env.SERVER_ORIGIN_URL || '';
+  const feishuBaseUrl = process.env.FEISHU_BASE_URL || 'https://open.feishu.cn';
 
   const feedMode = process.env.FEED_MODE as 'fulltext' | '';
 
@@ -23,6 +24,13 @@ const configuration = () => {
     throttler: { maxRequestPerMinute },
     auth: { code: authCode },
     platform: { url: platformUrl },
+    feishu: {
+      baseUrl: feishuBaseUrl,
+      appId: process.env.FEISHU_APP_ID || '',
+      appSecret: process.env.FEISHU_APP_SECRET || '',
+      receiveId: process.env.FEISHU_RECEIVE_ID || '',
+      receiveIdType: process.env.FEISHU_RECEIVE_ID_TYPE || 'chat_id',
+    },
     feed: {
       originUrl,
       mode: feedMode,

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ConfigurationType } from '@server/configuration';
 import { defaultCount, statusMap } from '@server/constants';
+import { FeishuLoginService } from '@server/trpc/feishu-login.service';
 import { PrismaService } from '@server/prisma/prisma.service';
 import { TRPCError, initTRPC } from '@trpc/server';
 import Axios, { AxiosInstance } from 'axios';
@@ -32,12 +33,14 @@ export class TrpcService {
   mergeRouters = this.trpc.mergeRouters;
   request: AxiosInstance;
   updateDelayTime = 60;
+  private readonly feishuLoginTasks = new Set<string>();
 
   private readonly logger = new Logger(this.constructor.name);
 
   constructor(
     private readonly prismaService: PrismaService,
     private readonly configService: ConfigService,
+    private readonly feishuLoginService: FeishuLoginService,
   ) {
     const { url } =
       this.configService.get<ConfigurationType['platform']>('platform')!;
@@ -64,6 +67,7 @@ export class TrpcService {
             data: { status: statusMap.INVALID },
           });
           this.logger.error(`账号（${id}）登录失效，已禁用`);
+          this.triggerFeishuLoginCard(id);
         } else if (errMsg.includes('WeReadError429')) {
           //TODO 处理请求频繁
           this.logger.error(`账号（${id}）请求频繁，打入小黑屋`);
@@ -101,6 +105,70 @@ export class TrpcService {
       blockedAccountsMap.set(today, newBlockedAccounts);
     }
   };
+
+  private triggerFeishuLoginCard(accountId?: string) {
+    if (!accountId || !this.feishuLoginService.isEnabled()) {
+      return;
+    }
+
+    if (this.feishuLoginTasks.has(accountId)) {
+      this.logger.log(`Feishu login card task for account ${accountId} exists`);
+      return;
+    }
+
+    this.feishuLoginTasks.add(accountId);
+    void this.sendFeishuLoginCardAndPoll(accountId).finally(() => {
+      this.feishuLoginTasks.delete(accountId);
+    });
+  }
+
+  private async sendFeishuLoginCardAndPoll(accountId: string) {
+    try {
+      const login = await this.createLoginUrl();
+      await this.feishuLoginService.sendLoginCard({
+        accountId,
+        uuid: login.uuid,
+        scanUrl: login.scanUrl,
+      });
+
+      const loginResult = await this.getLoginResult(login.uuid);
+      if (!loginResult.vid || !loginResult.token) {
+        this.logger.warn(
+          `Feishu login card task for account ${accountId} ended: ${
+            loginResult.message || 'no login result'
+          }`,
+        );
+        return;
+      }
+
+      const id = `${loginResult.vid}`;
+      const name = loginResult.username || id;
+      await this.prismaService.account.upsert({
+        where: { id },
+        update: {
+          name,
+          token: loginResult.token,
+          status: statusMap.ENABLE,
+        },
+        create: {
+          id,
+          name,
+          token: loginResult.token,
+          status: statusMap.ENABLE,
+        },
+      });
+      this.removeBlockedAccount(accountId);
+      this.removeBlockedAccount(id);
+      this.triggerRefreshAllMpArticlesAndUpdateFeed(
+        `account ${id} login success from Feishu card`,
+      );
+    } catch (err) {
+      this.logger.error(
+        `Feishu login card task for account ${accountId} failed`,
+        err,
+      );
+    }
+  }
 
   private getTodayDate() {
     return dayjs.tz(new Date(), 'Asia/Shanghai').format('YYYY-MM-DD');
@@ -297,6 +365,18 @@ export class TrpcService {
   }
 
   isRefreshAllMpArticlesRunning = false;
+
+  triggerRefreshAllMpArticlesAndUpdateFeed(reason: string) {
+    this.logger.log(
+      `trigger refreshAllMpArticlesAndUpdateFeed, reason: ${reason}`,
+    );
+    void this.refreshAllMpArticlesAndUpdateFeed().catch((err) => {
+      this.logger.error(
+        `refreshAllMpArticlesAndUpdateFeed failed, reason: ${reason}`,
+        err,
+      );
+    });
+  }
 
   async refreshAllMpArticlesAndUpdateFeed() {
     if (this.isRefreshAllMpArticlesRunning) {
