@@ -19,6 +19,8 @@ const configuration = () => {
   const updateDelayTime = parseInt(`${process.env.UPDATE_DELAY_TIME} || 60`);
 
   const enableCleanHtml = process.env.ENABLE_CLEAN_HTML === 'true';
+  const loginCheckEnabled = process.env.LOGIN_CHECK_ENABLED !== 'false';
+  const loginCheckMpId = process.env.LOGIN_CHECK_MP_ID || '';
   return {
     server: { isProd, port, host },
     throttler: { maxRequestPerMinute },
@@ -36,6 +38,8 @@ const configuration = () => {
       mode: feedMode,
       updateDelayTime,
       enableCleanHtml,
+      loginCheckEnabled,
+      loginCheckMpId,
     },
     database: {
       type: databaseType,

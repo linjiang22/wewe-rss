@@ -15,6 +15,10 @@ services:
       # - FEED_MODE=fulltext
       # 定时更新订阅源Cron表达式
       # - CRON_EXPRESSION=35 5,17 * * *
+      # 定时检查微信读书账号登录状态，失效后发送飞书登录卡片
+      - LOGIN_CHECK_CRON=${LOGIN_CHECK_CRON:-0 */6 * * *}
+      - LOGIN_CHECK_ENABLED=${LOGIN_CHECK_ENABLED:-true}
+      - LOGIN_CHECK_MP_ID=${LOGIN_CHECK_MP_ID:-}
       # 服务接口请求限制，每分钟请求次数
       # - MAX_REQUEST_PER_MINUTE=60
       # 外网访问时，需设置为服务器的公网 IP 或者域名地址

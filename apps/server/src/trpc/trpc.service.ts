@@ -4,6 +4,7 @@ import { ConfigurationType } from '@server/configuration';
 import { defaultCount, statusMap } from '@server/constants';
 import { FeishuLoginService } from '@server/trpc/feishu-login.service';
 import { PrismaService } from '@server/prisma/prisma.service';
+import { Cron } from '@nestjs/schedule';
 import { TRPCError, initTRPC } from '@trpc/server';
 import Axios, { AxiosInstance } from 'axios';
 import dayjs from 'dayjs';
@@ -179,6 +180,69 @@ export class TrpcService {
     const disabledAccounts = blockedAccountsMap.get(today) || [];
     this.logger.debug('disabledAccounts: ', disabledAccounts);
     return disabledAccounts.filter(Boolean);
+  }
+
+  @Cron(process.env.LOGIN_CHECK_CRON || '0 */6 * * *', {
+    name: 'checkAccountLoginStatus',
+    timeZone: 'Asia/Shanghai',
+  })
+  async handleCheckAccountLoginStatusCron() {
+    const { loginCheckEnabled } =
+      this.configService.get<ConfigurationType['feed']>('feed')!;
+    if (!loginCheckEnabled) {
+      return;
+    }
+
+    await this.checkAccountLoginStatus();
+  }
+
+  async checkAccountLoginStatus() {
+    const { loginCheckMpId } =
+      this.configService.get<ConfigurationType['feed']>('feed')!;
+
+    const probeFeedId =
+      loginCheckMpId ||
+      (
+        await this.prismaService.feed.findFirst({
+          where: { status: statusMap.ENABLE },
+          select: { id: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      )?.id;
+
+    if (!probeFeedId) {
+      this.logger.warn('skip account login check: no enabled feed');
+      return;
+    }
+
+    const accounts = await this.prismaService.account.findMany({
+      where: { status: statusMap.ENABLE },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (accounts.length === 0) {
+      this.logger.warn('skip account login check: no enabled account');
+      return;
+    }
+
+    this.logger.log(
+      `check account login status, accounts: ${accounts.length}, probeFeedId: ${probeFeedId}`,
+    );
+
+    for (const account of accounts) {
+      try {
+        await this.request.get(`/api/v2/platform/mps/${probeFeedId}/articles`, {
+          headers: {
+            xid: account.id,
+            Authorization: `Bearer ${account.token}`,
+          },
+          params: { page: 1 },
+        });
+        this.logger.log(`账号（${account.id}）登录状态正常`);
+      } catch (err) {
+        this.logger.error(`check account(${account.id}) login status error`, err);
+      }
+    }
   }
 
   private async getAvailableAccount() {

@@ -122,6 +122,9 @@ pnpm run start:server
 | `MAX_REQUEST_PER_MINUTE` | 每分钟最大请求次数                                                      | 60                          |
 | `FEED_MODE`              | 输出模式，可选值 `fulltext` (会使接口响应变慢，占用更多内存)            | -                           |
 | `CRON_EXPRESSION`        | 定时更新订阅源Cron表达式                                                | `35 5,17 * * *`             |
+| `LOGIN_CHECK_CRON`       | 定时检查微信读书账号登录状态 Cron 表达式，失效后发送飞书登录卡片        | `0 */6 * * *`               |
+| `LOGIN_CHECK_ENABLED`    | 是否启用微信读书账号登录状态定时检查                                    | `true`                      |
+| `LOGIN_CHECK_MP_ID`      | 登录状态检查使用的公众号源 ID；不填则使用第一个启用的公众号源           | -                           |
 | `UPDATE_DELAY_TIME`      | 连续更新延迟时间，减少被关小黑屋                                        | `60s`                       |
 | `ENABLE_CLEAN_HTML`      | 是否开启正文html清理                                                    | `false`                     |
 | `PLATFORM_URL`           | 基础服务URL                                                             | `https://weread.111965.xyz` |
