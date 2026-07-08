@@ -19,6 +19,13 @@ dayjs.extend(timezone);
  */
 const blockedAccountsMap = new Map<string, string[]>();
 
+type LoginResult = {
+  message: string;
+  vid?: number;
+  token?: string;
+  username?: string;
+};
+
 @Injectable()
 export class TrpcService {
   trpc = initTRPC.create();
@@ -35,6 +42,7 @@ export class TrpcService {
   request: AxiosInstance;
   updateDelayTime = 60;
   private readonly feishuLoginTasks = new Set<string>();
+  private readonly feishuLoginCardSentAt = new Map<string, number>();
 
   private readonly logger = new Logger(this.constructor.name);
 
@@ -112,11 +120,20 @@ export class TrpcService {
       return;
     }
 
+    const lastSentAt = this.feishuLoginCardSentAt.get(accountId) || 0;
+    if (Date.now() - lastSentAt < 30 * 60 * 1e3) {
+      this.logger.log(
+        `Feishu login card task for account ${accountId} skipped by cooldown`,
+      );
+      return;
+    }
+
     if (this.feishuLoginTasks.has(accountId)) {
       this.logger.log(`Feishu login card task for account ${accountId} exists`);
       return;
     }
 
+    this.feishuLoginCardSentAt.set(accountId, Date.now());
     this.feishuLoginTasks.add(accountId);
     void this.sendFeishuLoginCardAndPoll(accountId).finally(() => {
       this.feishuLoginTasks.delete(accountId);
@@ -132,7 +149,7 @@ export class TrpcService {
         scanUrl: login.scanUrl,
       });
 
-      const loginResult = await this.getLoginResult(login.uuid);
+      const loginResult = await this.pollLoginResult(login.uuid, accountId);
       if (!loginResult.vid || !loginResult.token) {
         this.logger.warn(
           `Feishu login card task for account ${accountId} ended: ${
@@ -171,6 +188,38 @@ export class TrpcService {
     }
   }
 
+  private async pollLoginResult(uuid: string, accountId: string) {
+    const maxAttempts = 120;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const loginResult = await this.getLoginResult(uuid, 15 * 1e3).catch(
+        (err) => {
+          this.logger.warn(
+            `Feishu login card task for account ${accountId} poll login result failed (${attempt}/${maxAttempts}): ${
+              err?.message || err
+            }`,
+          );
+          return { message: 'waiting' } as LoginResult;
+        },
+      );
+      if (loginResult.vid && loginResult.token) {
+        return loginResult;
+      }
+
+      this.logger.log(
+        `Feishu login card task for account ${accountId} waiting login result (${attempt}/${maxAttempts}): ${
+          loginResult.message || 'waiting'
+        }`,
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 5 * 1e3));
+    }
+
+    return {
+      message: 'login timeout',
+    };
+  }
+
   private getTodayDate() {
     return dayjs.tz(new Date(), 'Asia/Shanghai').format('YYYY-MM-DD');
   }
@@ -199,6 +248,19 @@ export class TrpcService {
   async checkAccountLoginStatus() {
     const { loginCheckMpId } =
       this.configService.get<ConfigurationType['feed']>('feed')!;
+
+    const invalidAccounts = await this.prismaService.account.findMany({
+      where: { status: statusMap.INVALID },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    for (const account of invalidAccounts) {
+      this.logger.warn(
+        `账号（${account.id}）已是失效状态，发送微信登录卡片`,
+      );
+      this.triggerFeishuLoginCard(account.id);
+    }
 
     const probeFeedId =
       loginCheckMpId ||
@@ -497,14 +559,9 @@ export class TrpcService {
       .then((res) => res.data);
   }
 
-  async getLoginResult(id: string) {
+  async getLoginResult(id: string, timeout = 120 * 1e3) {
     return this.request
-      .get<{
-        message: string;
-        vid?: number;
-        token?: string;
-        username?: string;
-      }>(`/api/v2/login/platform/${id}`, { timeout: 120 * 1e3 })
+      .get<LoginResult>(`/api/v2/login/platform/${id}`, { timeout })
       .then((res) => res.data);
   }
 }

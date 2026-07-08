@@ -86,7 +86,7 @@ export class FeishuLoginService {
       type: 'png',
       errorCorrectionLevel: 'M',
       margin: 2,
-      width: 180,
+      width: 360,
     });
   }
 
@@ -194,44 +194,51 @@ export class FeishuLoginService {
       },
       {
         tag: 'img',
+        element_id: 'login_qr',
         img_key: imageKey,
         alt: {
           tag: 'plain_text',
           content: '微信扫码登录二维码',
         },
-        mode: 'fit_horizontal',
+        scale_type: 'crop_center',
+        size: '180px 180px',
+        preview: true,
+        margin: '8px 0px 8px 0px',
       },
       {
-        tag: 'note',
-        elements: [
-          {
-            tag: 'plain_text',
-            content: `二维码有效期较短。登录成功后会自动保存账号并触发全部更新。登录任务：${uuid}`,
-          },
-        ],
+        tag: 'div',
+        text: {
+          tag: 'plain_text',
+          content: `二维码有效期较短。登录成功后会自动保存账号并触发全部更新。登录任务：${uuid}`,
+          text_size: 'notation',
+          text_color: 'grey',
+        },
       },
     ];
 
     if (originUrl) {
       elements.push({
-        tag: 'action',
-        actions: [
+        tag: 'button',
+        text: {
+          tag: 'plain_text',
+          content: '打开账号管理',
+        },
+        type: 'primary',
+        size: 'small',
+        width: 'default',
+        behaviors: [
           {
-            tag: 'button',
-            text: {
-              tag: 'plain_text',
-              content: '打开账号管理',
-            },
-            type: 'primary',
-            url: `${originUrl}/accounts`,
+            type: 'open_url',
+            default_url: `${originUrl}/accounts`,
           },
         ],
       });
     }
 
     return {
+      schema: '2.0',
       config: {
-        wide_screen_mode: true,
+        width_mode: 'compact',
       },
       header: {
         template: 'red',
@@ -240,7 +247,13 @@ export class FeishuLoginService {
           content: 'WeWe RSS 账号登录失效',
         },
       },
-      elements,
+      body: {
+        direction: 'vertical',
+        padding: '12px 12px 12px 12px',
+        horizontal_align: 'center',
+        vertical_spacing: '8px',
+        elements,
+      },
     };
   }
 }

@@ -18,7 +18,7 @@ import {
 } from '@nextui-org/react';
 import { PlusIcon } from '@web/components/PlusIcon';
 import { trpc } from '@web/utils/trpc';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import dayjs from 'dayjs';
@@ -62,7 +62,14 @@ const Feeds = () => {
     });
 
   const { data: isRefreshAllMpArticlesRunning } =
-    trpc.feed.isRefreshAllMpArticlesRunning.useQuery();
+    trpc.feed.isRefreshAllMpArticlesRunning.useQuery(undefined, {
+      refetchInterval: 5 * 1e3,
+      refetchIntervalInBackground: true,
+      refetchOnMount: true,
+      refetchOnReconnect: true,
+      refetchOnWindowFocus: true,
+    });
+  const wasRefreshAllMpArticlesRunning = useRef(false);
 
   const { mutateAsync: deleteFeed, isLoading: isDeleteFeedLoading } =
     trpc.feed.delete.useMutation({});
@@ -109,6 +116,19 @@ const Feeds = () => {
   const currentMpInfo = useMemo(() => {
     return feedData?.items.find((item) => item.id === currentMpId);
   }, [currentMpId, feedData?.items]);
+
+  useEffect(() => {
+    if (
+      wasRefreshAllMpArticlesRunning.current &&
+      !isRefreshAllMpArticlesRunning
+    ) {
+      refetchFeedList();
+      queryUtils.article.list.reset();
+    }
+    wasRefreshAllMpArticlesRunning.current = Boolean(
+      isRefreshAllMpArticlesRunning,
+    );
+  }, [isRefreshAllMpArticlesRunning, queryUtils.article.list, refetchFeedList]);
 
   const handleExportOpml = async (ev) => {
     ev.preventDefault();

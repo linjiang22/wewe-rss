@@ -10,9 +10,9 @@ import { FeedsModule } from './feeds/feeds.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     TrpcModule,
     FeedsModule,
-    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
