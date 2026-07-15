@@ -120,8 +120,10 @@ export class TrpcService {
       return;
     }
 
+    const { loginCardCooldownSeconds } =
+      this.configService.get<ConfigurationType['feed']>('feed')!;
     const lastSentAt = this.feishuLoginCardSentAt.get(accountId) || 0;
-    if (Date.now() - lastSentAt < 30 * 60 * 1e3) {
+    if (Date.now() - lastSentAt < loginCardCooldownSeconds * 1e3) {
       this.logger.log(
         `Feishu login card task for account ${accountId} skipped by cooldown`,
       );
@@ -189,7 +191,13 @@ export class TrpcService {
   }
 
   private async pollLoginResult(uuid: string, accountId: string) {
-    const maxAttempts = 120;
+    const { loginCardPollTimeoutSeconds } =
+      this.configService.get<ConfigurationType['feed']>('feed')!;
+    const pollIntervalSeconds = 5;
+    const maxAttempts = Math.max(
+      1,
+      Math.ceil(loginCardPollTimeoutSeconds / pollIntervalSeconds),
+    );
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const loginResult = await this.getLoginResult(uuid, 15 * 1e3).catch(
@@ -212,7 +220,9 @@ export class TrpcService {
         }`,
       );
 
-      await new Promise((resolve) => setTimeout(resolve, 5 * 1e3));
+      await new Promise((resolve) =>
+        setTimeout(resolve, pollIntervalSeconds * 1e3),
+      );
     }
 
     return {
@@ -242,7 +252,52 @@ export class TrpcService {
       return;
     }
 
+    if (!this.shouldRunLoginCheckNow()) {
+      return;
+    }
+
     await this.checkAccountLoginStatus();
+  }
+
+  private shouldRunLoginCheckNow() {
+    const { loginCheckStartTime, loginCheckIntervalMinutes } =
+      this.configService.get<ConfigurationType['feed']>('feed')!;
+
+    if (!loginCheckStartTime || loginCheckIntervalMinutes <= 0) {
+      return true;
+    }
+
+    const match = loginCheckStartTime.match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) {
+      this.logger.warn(
+        `skip account login check: invalid LOGIN_CHECK_START_TIME ${loginCheckStartTime}`,
+      );
+      return false;
+    }
+
+    const [, hourValue, minuteValue] = match;
+    const hour = Number(hourValue);
+    const minute = Number(minuteValue);
+    if (hour > 23 || minute > 59) {
+      this.logger.warn(
+        `skip account login check: invalid LOGIN_CHECK_START_TIME ${loginCheckStartTime}`,
+      );
+      return false;
+    }
+
+    const now = dayjs.tz(new Date(), 'Asia/Shanghai');
+    const start = now
+      .startOf('day')
+      .hour(hour)
+      .minute(minute)
+      .second(0)
+      .millisecond(0);
+
+    if (now.isBefore(start)) {
+      return false;
+    }
+
+    return now.diff(start, 'minute') % loginCheckIntervalMinutes === 0;
   }
 
   async checkAccountLoginStatus() {
