@@ -128,6 +128,7 @@ pnpm run start:server
 | `LOGIN_CHECK_INTERVAL_MINUTES` | 从开始时间起，每隔多少分钟真正执行一次登录状态检查               | -                           |
 | `LOGIN_CARD_COOLDOWN_SECONDS` | 同一账号两次发送飞书登录卡片的最小间隔秒数                       | `1800`                      |
 | `LOGIN_CARD_POLL_TIMEOUT_SECONDS` | 发送飞书登录卡片后等待扫码结果的最长秒数                         | `600`                       |
+| `LOGIN_CARD_MAX_SENDS_PER_DAY` | 同一账号每天最多发送多少次飞书登录卡片                            | `5`                         |
 | `LOGIN_CHECK_MP_ID`      | 登录状态检查使用的公众号源 ID；不填则使用第一个启用的公众号源           | -                           |
 | `UPDATE_DELAY_TIME`      | 连续更新延迟时间，减少被关小黑屋                                        | `60s`                       |
 | `ENABLE_CLEAN_HTML`      | 是否开启正文html清理                                                    | `false`                     |

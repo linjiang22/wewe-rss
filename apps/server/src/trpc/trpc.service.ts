@@ -43,6 +43,7 @@ export class TrpcService {
   updateDelayTime = 60;
   private readonly feishuLoginTasks = new Set<string>();
   private readonly feishuLoginCardSentAt = new Map<string, number>();
+  private readonly feishuLoginCardSendCounts = new Map<string, number>();
 
   private readonly logger = new Logger(this.constructor.name);
 
@@ -113,6 +114,8 @@ export class TrpcService {
       const newBlockedAccounts = blockedAccounts.filter((id) => id !== vid);
       blockedAccountsMap.set(today, newBlockedAccounts);
     }
+
+    this.resetFeishuLoginCardSendCount(vid);
   };
 
   private triggerFeishuLoginCard(accountId?: string) {
@@ -120,8 +123,16 @@ export class TrpcService {
       return;
     }
 
-    const { loginCardCooldownSeconds } =
+    const { loginCardCooldownSeconds, loginCardMaxSendsPerDay } =
       this.configService.get<ConfigurationType['feed']>('feed')!;
+    const sentCount = this.getFeishuLoginCardSendCount(accountId);
+    if (sentCount >= loginCardMaxSendsPerDay) {
+      this.logger.log(
+        `Feishu login card task for account ${accountId} skipped by daily limit (${sentCount}/${loginCardMaxSendsPerDay})`,
+      );
+      return;
+    }
+
     const lastSentAt = this.feishuLoginCardSentAt.get(accountId) || 0;
     if (Date.now() - lastSentAt < loginCardCooldownSeconds * 1e3) {
       this.logger.log(
@@ -135,7 +146,6 @@ export class TrpcService {
       return;
     }
 
-    this.feishuLoginCardSentAt.set(accountId, Date.now());
     this.feishuLoginTasks.add(accountId);
     void this.sendFeishuLoginCardAndPoll(accountId).finally(() => {
       this.feishuLoginTasks.delete(accountId);
@@ -150,6 +160,7 @@ export class TrpcService {
         uuid: login.uuid,
         scanUrl: login.scanUrl,
       });
+      this.markFeishuLoginCardSent(accountId);
 
       const loginResult = await this.pollLoginResult(login.uuid, accountId);
       if (!loginResult.vid || !loginResult.token) {
@@ -232,6 +243,34 @@ export class TrpcService {
 
   private getTodayDate() {
     return dayjs.tz(new Date(), 'Asia/Shanghai').format('YYYY-MM-DD');
+  }
+
+  private getFeishuLoginCardSendCountKey(accountId: string) {
+    return `${this.getTodayDate()}:${accountId}`;
+  }
+
+  private getFeishuLoginCardSendCount(accountId: string) {
+    return (
+      this.feishuLoginCardSendCounts.get(
+        this.getFeishuLoginCardSendCountKey(accountId),
+      ) || 0
+    );
+  }
+
+  private markFeishuLoginCardSent(accountId: string) {
+    this.feishuLoginCardSentAt.set(accountId, Date.now());
+    const countKey = this.getFeishuLoginCardSendCountKey(accountId);
+    this.feishuLoginCardSendCounts.set(
+      countKey,
+      (this.feishuLoginCardSendCounts.get(countKey) || 0) + 1,
+    );
+  }
+
+  private resetFeishuLoginCardSendCount(accountId: string) {
+    this.feishuLoginCardSendCounts.delete(
+      this.getFeishuLoginCardSendCountKey(accountId),
+    );
+    this.feishuLoginCardSentAt.delete(accountId);
   }
 
   getBlockedAccountIds() {

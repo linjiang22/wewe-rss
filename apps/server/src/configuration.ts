@@ -31,6 +31,9 @@ const configuration = () => {
   const loginCardPollTimeoutSeconds = parseInt(
     process.env.LOGIN_CARD_POLL_TIMEOUT_SECONDS || `${10 * 60}`,
   );
+  const loginCardMaxSendsPerDay = parseInt(
+    process.env.LOGIN_CARD_MAX_SENDS_PER_DAY || '5',
+  );
   return {
     server: { isProd, port, host },
     throttler: { maxRequestPerMinute },
@@ -54,6 +57,7 @@ const configuration = () => {
       loginCheckIntervalMinutes,
       loginCardCooldownSeconds,
       loginCardPollTimeoutSeconds,
+      loginCardMaxSendsPerDay,
     },
     database: {
       type: databaseType,
